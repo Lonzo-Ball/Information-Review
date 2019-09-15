@@ -14,4 +14,7 @@
     7.cat /etc/hosts  查看hosts文件
     8.ping命令  查看网络的畅通性
     9.traceroute命令  "跟踪"
-	
+
+系统相关命令：
+    1.ipcs  显示 IPC 资源
+    2.ipcrm  手动删除 IPC 资源
