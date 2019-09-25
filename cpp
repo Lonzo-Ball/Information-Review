@@ -82,7 +82,47 @@
 
 	  优点：第一次使用实例对象时创建对象。进程启动无负载。多个单例实例启动顺序自由控制
 	  缺点：复杂
-    		class Singleton{
+		class Singleton{
 		private:
+			//构造函数私有
+			Singleton(){
+				pthread_mutex_init(&lock,NULL);
+				cout << "Singleton()" << endl;
+			}
+
+			//C++11 delete
+			Singleton(const Singleton&) = delete;
+			Singleton& operator=(const Singleton) = delete;
+
+			static Singleton *m_pInstance;  //单例对象指针
+			static pthread_mutex_t  lock;  //互斥锁
 		public:
+			static Singleton* GetInstance(){
+				if(NULL == m_pInstance){
+					pthread_mutex_lock(&lock);
+					if(NULL == m_pInstance){
+						m_pInstance = new Singleton();
+					}
+					pthread_mutex_unlock(&lock);
+				}
+
+				return m_pInstance;
+			}
+
+			//实现一个内嵌垃圾回收类
+			class CGarbo{
+			private:
+			public:
+				~CGarbo(){
+					pthread_mutex_destroy(&lock);
+					if(NULL != m_pInstance){
+						cout << "~CGarbo" << endl;
+						delete Singleton::m_pInstance;
+					}
+				}
+			};
+			static CGarbo Garbo;  //定义一个静态成员变量，程序结束时，会自动调用它的析构函数从而释放单例对象
 		};
+		Singleton* Singleton::m_pInstance = NULL;
+		pthread_mutex_t Singleton::lock;
+		Singleton::CGarbo Garbo;
