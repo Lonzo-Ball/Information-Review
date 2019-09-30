@@ -1,3 +1,7 @@
+目录：
+    一.数据库基础
+    二.库的操作
+
 ##  一.数据库基础  ##
 1.什么是数据库
     文件保存数据有以下几个缺点：
@@ -65,3 +69,134 @@
     MySQL 的核心就是插件式存储引擎，支持多种存储引擎
 
     查看存储引擎：show engines;
+
+##  二.库的操作  ##
+1.创建数据库
+    语法：
+    说明：
+
+2.创建数据库案例
+    1.创建名为 db1 的数据库：
+	create database db1;
+        说明：当我们创建数据库没有指定字符集和校验规则时，系统使用默认字符集：utf8，校验规则是：utf8_general_ci
+    2.创建一个使用 utf8 字符集的 db2 数据库：
+	create database db2 charset=utf8;
+    3.创建一个使用 utf8 字符集，并带校对规则的 db3 数据库：
+	create database db3 charset=utf8 collate utf8_general_ci;
+
+3.字符集和校验规则
+    查看系统默认字符集、校验规则：
+	show variables like 'character_set_database';
+	show variables like 'collation_database';
+
+    查看数据库支持的字符集：
+	show charset;
+	字符集主要是控制用什么语言，比如 utf8 就可以使用中文
+    查看数据库支持的字符集校验规则：
+	show collation;
+
+    校验规则对数据库的影响：
+	1.创建一个数据库，校验规则使用 utf8_general_ci [不区分大小写]
+	    create database test1 collate utf8_general_ci;
+	    use test1;
+	    create table person(name varchar(20));
+	    insert into person values('a');
+	    insert into person values('A');
+	    insert into person values('b');
+	    insert into person values('B');
+ 	2.创建一个数据库，校验规则使用 utf8_bin [区分大小写]
+	    create database test2 collate utf8_bin;
+	    use test2;
+	    create table person(name varchar(20));
+	    insert into person values('a');
+	    insert into person values('A');
+	    insert into person values('b');
+	    insert into person values('B');
+
+	3.不区分大小写的查询
+	    use test1;
+	    select * from person where name='a';
+	4.区分大小写的查询
+	    use test2;
+	    select * from person where name='a';
+
+	5.不区分大小排序
+	    use test1;
+	    select * from person order by name;
+	6.区分大小写排序
+    	    use test2;
+	    select * from person order by name;
+    
+4.操纵数据库
+    1.查看数据库：
+	show databases;
+
+    2.显示创建语句：
+	语法：
+	    show create database 数据库名;
+	
+	示例：
+	    MariaDB [test2]> show create database test1;
+	    +----------+----------------------------------------------------------------+
+	    | Database | Create Database                                                |
+	    +----------+----------------------------------------------------------------+
+	    | test1    | CREATE DATABASE `test1` /*!40100 DEFAULT CHARACTER SET utf8 */ |
+	    +----------+----------------------------------------------------------------+
+	说明：
+	    1.MySQL 建议我们关键字使用大写，但是不是必须的
+	    2.`test1` 数据库名字的反引号是为了防止使用的数据库名刚好是关键字
+	    3./*!40100 DEFAULT CHARACTER SET utf8 */ 这不是注释，表示当前 MySQL 版本大于 4.01，就执行这句话
+
+    3.修改数据库：
+	语法：
+	说明：对数据库的修改主要指的是修改数据库的字符集、校验规则
+
+	实例：将 test 数据库字符集改成 gbk;
+	    alter database test charset=gdk;
+	实例：将 test 数据库的校验规则改成 big5_chinese_ci
+	    alter database test collate big5_chinese_ci;
+
+    4.删除数据库:
+	语法：
+	实例：将 test 数据库删除
+	    drop database test;
+
+	执行删除之后的结果：
+	    1.数据库内部看不到对应的数据库
+	    2.对应的数据库文件夹被删除，级联删除，里面的数据表全部被删
+	注意：不要随意删除数据库
+
+    5.备份和恢复：
+	备份：
+	    语法：
+		mysqldump -p 3306 -u root -p 密码 -B 数据库名 > 数据库备份存储的文件路径
+	    示例：将 test 数据库进行备份
+		mysqldump -p 3306 -u root -p 密码 -B test > ./test.sql
+	    这是可以打开看看 test.sql 文件里的内容，其实把我们整个创建数据库、建表、导入数据的语句都装载到这个文件中了
+	
+	还原：
+	    语法：
+		mysql> source D:/mysql-5.7.22/test.sql
+	
+	注意事项：
+	    1.如果备份的不是整个数据库，而是其中的一张表，怎么做？
+		mysqldump -u root -p 数据库名 表名1 表名2 > ./test.sql
+	    2.同时备份多个数据库
+		mysqldump -u root -p -B 数据库名1 数据库名2 ... > 数据库存放路径
+	    3.如果备份一个数据库时，没有带上 -B 参数，在恢复数据库时，需要先建立空数据库，然后使用数据库，再使用 source 来还原
+
+    6.查看连接情况
+	语法：
+	    show processlist;
+
+	示例：
+	    MariaDB [(none)]> show processlist;
+	    +----+------+-----------+------+---------+------+-------+------------------+----------+
+	    | Id | User | Host      | db   | Command | Time | State | Info             | Progress |
+	    +----+------+-----------+------+---------+------+-------+------------------+----------+
+	    |  4 | root | localhost | NULL | Query   |    0 | NULL  | show processlist |    0.000 |
+	    +----+------+-----------+------+---------+------+-------+------------------+----------+	
+	    可以告诉我们当前有哪些用户连接到我们的 MySQL，如果查出某个用户不是你正常登陆的，很可能你的数据库被人入侵了。发现数据库比较慢时，可以用这个指
+            令来查看数据库的连接情况
+
+
