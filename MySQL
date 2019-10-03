@@ -1,6 +1,7 @@
 目录：
     一.数据库基础
     二.库的操作
+    三.表的操作
 
 ##  一.数据库基础  ##
 1.什么是数据库
@@ -199,4 +200,79 @@
 	    可以告诉我们当前有哪些用户连接到我们的 MySQL，如果查出某个用户不是你正常登陆的，很可能你的数据库被人入侵了。发现数据库比较慢时，可以用这个指
             令来查看数据库的连接情况
 
+##  三.表的操作  ##
+1.创建表
+    语法：
+	CREATE TABLE table_name(
+	    field1 datatype,
+	    field2 datatype,
+	    field3 datatype
+	)character set 字符集 collate 校验规则 engine 存储引擎;
+
+    说明：
+	1.field：表示列明
+	2.datatype：表示列的类型
+	3.character set 字符集：如果没有指定字符集，则以所在数据库的字符集为准
+	4.collate 校验规则：如果没有指定校验规则，则以所在数据库的校验规则为准
+
+2.创建表案例
+    create table users (
+	id int,
+	name varchar(20) comment '姓名',
+	password char(32) comment '密码是 32 位'
+    )character set utf8 engine MyISAM;
+
+    说明：不同的存储引擎，创建表的文件不一样
+    users 表存储引擎是 MyISAM，在数据目录中有三个不同的文件：
+	1.users.frm：表结构
+	2.users.MYD：表数据
+	3.users.MYI：表索引
+	
+3.查看表结构
+    desc 表名
+
+    示例：
+	MariaDB [db1]> desc users;
+ 					索引类型
+	+----------+-------------+------+-----+---------+-------+
+	| Field    | Type        | Null | Key | Default | Extra |
+	+----------+-------------+------+-----+---------+-------+
+	| id       | int(11)     | YES  |     | NULL    |       |
+	| name     | varchar(20) | YES  |     | NULL    |       |
+	| password | char(32)    | YES  |     | NULL    |       |
+	+----------+-------------+------+-----+---------+-------+
+	字段名字   字段类型      是否允许为空 默认值    扩充
+
+4.修改表
+    在项目实际开发中，经常修改某个表的结构，比如字段名字，字段大小，字段类型，表的字符集类型，表的存储引擎等等。我们还有需求，添加字段，删除字段等等。
+    这时我们就需要修改表。
+
+    语法：
+
+    案例1：在 users 表中添加两条记录
+	insert into users values (1,'鸟哥','111'),(2,'小丽','222');
+
+    案例2：在 users 表中添加一个字段，用于表示生日
+	alter table users add birthday date comment '生日' after password;
+    
+    案例3：修改 name，将其长度变为 40
+ 	alter table users modify name varchar(40);
+    
+    案例4：删除 assets 列
+	注意：删除字段一定要小心，删除字段及其对应的列数据都没了
+	alter table users drop assert;
+    
+    案例5：修改表明为 employee
+	alter table users rename to employee;
+        注：to 可以省略
+
+    案例6：将 name 列修改为姓名
+	alter table employee change name xingming varchar(30);
+	注：新字段需要完整定义
+
+5.删除表
+    语法：
+
+    示例：
+	drop table t1;
 
