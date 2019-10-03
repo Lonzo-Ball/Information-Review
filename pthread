@@ -84,7 +84,7 @@ bug 可能会出现，这种 bug 难以复现，而且难以排查。所以编�
 tgid，含义是 Thread Group ID，该值对应的是用户层面的进程 ID。
     这里的线程 ID，不同于后面会讲到的 pthread_t 类型的线程 ID，和进程 ID 一样，线程 ID 是 pid_t 类型的变量，而且是用来唯一标识线程的一个整形变量。
     
-    查看线程 ID：
+    查看线程 ID：ps -eLf
     UID         PID   PPID    LWP  C NLWP STIME TTY          TIME CMD
     ...
     root        786      1    786  0    3 17:40 ?        00:00:00 /usr/sbin/ModemManager
