@@ -122,3 +122,47 @@ group_leader 指针则指向自身，即主线程的进程描述符。
 	3.并非只有主线程才能调用 pthread_join 连接其他线程，同一线程组内的任何线程都可以对某线程执行 pthread_join 函数
 	4.并非主线程才能调用 pthread_detach 函数，其实任意线程都可以对同一线程组内的线程执行分离操作 
 
+三.线程的创建和标识
+1.pthread_create 函数
+
+    pthread 库提供了如下接口来创建线程：
+    	#include <pthread.h>
+    	int pthread_create(pthread_t *thread, const pthread_attr_t *attr,void *(*start_routine) (void *), void *arg);
+
+    pthread_create 函数的第一个参数是 pthread_t 类型的指针，线程创建成功的话，会将分配的线程 ID 填入该指针指向的地址。线程的后续操作将使用该值作为线程的
+唯一标识。
+    第二个参数是 pthread_attr_t 类型的指针，通过该参数可以定制线程的属性，比如可以指定新建线程栈的大小、调度策略等。如果创建线程无特殊要求，该值也可以是
+NULL，标识采用默认属性。
+    第三个参数是线程需要执行的函数。创建线程，是为了让线程执行一定的任务。线程创建成功之后，该线程就会执行 start_routine 函数，该函数之于线程，就如同 
+main 函数之于主线程。
+    第四个参数是新建线程执行的 start_routine 函数的参数。
+
+    新建线程如果想要正常工作，则可能需要入参，那么主线程在调用 pthread_create 的时候，就可以将入参的指针放入第四个参数以传递给新建线程。
+    如果线程的执行函数 start_routine 需要很多入参，传递一个指针就能提供足够的信息吗？答案是能。线程创建者和线程约定一个结构体，创建者便把信息填入该结构体
+，再将结构体的指针传递给子进程，子进程只要解析该结构体，就能取出需要的信息。
+
+    如果成功，pthtread_create 返回 0；如果不成功，则 pthread_create 返回一个非 0 的错误码。常见的错误码有：
+	1.EAGAIN：系统资源不够，或者创建线程的个数超过了系统对一个进程中线程总数的限制
+	2.EINVAL：第二个参数 attr 值不合法
+	3.EPERM：没有合适的权限来设置调度策略或参数
+    pthread_create 函数的返回情况有些特殊，通常情况下，函数调用失败，则返回 -1，并且设置 errno。pthread_create 函数则不同，它会将 errno 作为返回值，而不
+是一个负值。
+
+2.线程 ID 及进程地址空间布局
+    pthread_create 函数，会产生一个线程 ID，存放在第一个参数指向的地址中。该线程 ID 和 pid_t 类型的线程 ID 是一回事吗？
+    答案是否定的。
+    pid_t 类型的线程 ID，属于进程调度范畴。因为线程是轻量级进程，是操作系统调度的最小单位，所以需要一个数值来唯一标识该线程。
+    pthread_create 函数产生并记录在第一个参数指向地址中的线程 ID，属于 NPTL 线程库的范畴，线程的后续操作，就是根据该线程 ID 来操作线程的。
+
+    线程库 NPTL 提供了 pthread_self 函数，可以获取到线程自身的 ID：
+	#include <pthread.h>
+	pthread_t pthread_self(void);
+
+    在同一个线程组内，线程库提供了 pthread_equal 函数，可以判断两个线程 ID 是否对应着同一个线程：
+	#include <pthread.h>
+	int pthread_equal(pthread_t t1, pthread_t t2);
+    返回值是 0 的时候，表示两个线程是同一个线程，非零值则表示不是同一个线程。
+
+    pthread_t 到底是个什么样的数据结构呢？因为 POSIX 标准并没有限制 pthread_t 的数据类型，所以该类型取决于具体的实现。对于 Linux 目前使用的 NPTL 实现而言
+，pthread_t 类型的线程 ID，本质就是一个进程地址空间上的地址。
+
