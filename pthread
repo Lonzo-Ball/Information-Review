@@ -148,7 +148,7 @@ main 函数之于主线程。
     pthread_create 函数的返回情况有些特殊，通常情况下，函数调用失败，则返回 -1，并且设置 errno。pthread_create 函数则不同，它会将 errno 作为返回值，而不
 是一个负值。
 
-2.线程 ID 及进程地址空间布局
+2.线程 ID
     pthread_create 函数，会产生一个线程 ID，存放在第一个参数指向的地址中。该线程 ID 和 pid_t 类型的线程 ID 是一回事吗？
     答案是否定的。
     pid_t 类型的线程 ID，属于进程调度范畴。因为线程是轻量级进程，是操作系统调度的最小单位，所以需要一个数值来唯一标识该线程。
@@ -165,4 +165,87 @@ main 函数之于主线程。
 
     pthread_t 到底是个什么样的数据结构呢？因为 POSIX 标准并没有限制 pthread_t 的数据类型，所以该类型取决于具体的实现。对于 Linux 目前使用的 NPTL 实现而言
 ，pthread_t 类型的线程 ID，本质就是一个进程地址空间上的地址。
+
+3.进程地址空间布局
+    在 x86_64 平台上，用户地址空间约为 128 TB（1TB = 1024 MB），对于地址空间的布局，系统有如下控制选项：
+    
+	[lonzo@localhost vm]$ cat /proc/sys/vm/legacy_va_layout 
+	0
+	[lonzo@localhost vm]$
+
+    该选项影响地址空间的布局，主要影响 mmap 区域的基地址位置，以及 mmap 区域是向上还是向下增长：
+	如果该值为 1：那么 mmap 的基地址 mmap_base 变小（约在 128TB 的三分之一处），mmap 区域从低地址向高地址扩展
+	如果该值为 0：那么 mmap 区域的基地址在栈的下面（约在 128 TB 处），mmap 区域从高地址向低地址扩展
+
+    可以通过 procfs 或 pmap 命令来查看进程的地址空间的情况：
+	pmap PID
+	cat /proc/PID/maps
+
+       	[lonzo@localhost ~]$ pmap 9762
+	...                 ...          ...
+	00007fca09627000      4K rw---   [ anon ]
+	00007ffcd7da6000    132K rw---   [ stack ]
+	00007ffcd7dde000      8K r-x--   [ anon ]
+	ffffffffff600000      4K r-x--   [ anon ]
+ 	total           116556K
+
+	[lonzo@localhost ~]$ cat /proc/9762/maps
+	7fca09625000-7fca09626000 r--p 00021000 08:03 67283801                   /usr/lib64/ld-2.17.so
+	7fca09626000-7fca09627000 rw-p 00022000 08:03 67283801                   /usr/lib64/ld-2.17.so
+	7fca09627000-7fca09628000 rw-p 00000000 00:00 0 
+	7ffcd7da6000-7ffcd7dc7000 rw-p 00000000 00:00 0                          [stack]
+	7ffcd7dde000-7ffcd7de0000 r-xp 00000000 00:00 0                          [vdso]
+	ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0                  [vsyscall]
+
+    在接近 128TB 的巨大地址空间里，代码段、已初始化数据段、未初始化数据段，以及主线程的栈，所占用的空间非常小，都是 KB、MB 这个数量级的。
+    由于主线程的栈大小并不是固定的，要在运行时才能确定大小（上限大概在 8MB 左右），因此，在栈中不能存在巨大的局部变量，另外编写递归函数时一定要小心，递归
+不能太深，否则很可能耗尽栈空间。
+
+    进程地址空间之中，最大的两块地址空间是内存映射区域和堆。堆的起始地址特别低，向上扩展，mmap 区域的起始地址特别高，向下扩展。
+    用户调用 pthread_create 函数时，glibc 首先要为线程分配线程栈，而线程栈的位置就落在 mmap 区域。glibc 会调用 mmap 函数为线程分配栈空间。pthread_create 
+函数分配的 pthread_t 类型的线程 ID，不过是分配出来的空间里的一个地址，更确切地说是一个结构体的地址。
+
+    线程 ID 是进程空间内的一个地址，要在同一个线程组内进行线程之间的比较才有意义。不同线程组内的两个线程，哪怕两者的 pthread_t 值是一样的，也不是同一个
+线程，这是显而易见的。
+    很有意思的一点是，pthread_t 类型的线程 ID 很有可能会重复。在满足下列条件时，线程 ID 就有可能会被复用：
+	1.线程退出
+	2.线程组的其它线程对该线程执行了 pthread_join，或者线程退出前将分离状态设置为已分离
+	3.再次调用 pthread_create 创建线程
+
+    对于 pthread_t 类型的线程 ID，虽然在同一时刻不会存在两个线程的 ID 值相同，但是如果线程退出了，重新创建的线程很可能复用了同一个 pthread_t 类型的 ID。
+从这个角度，如果要设计调试日志，用 pthread_t 类型的线程 ID 来标识进程就不太合适了。用 pid_t 类型的线程 ID 则是一个不错的选择。
+    采用 pid_t 类型的线程 ID 来唯一标识进程有以下优势：
+	1.返回类型是 pid_t 类型，进程之间不会存在重复的线程 ID，而且不同线程之间也不会重复，在任意时刻都是全局唯一的值
+	2.procfs 中记录了线程相关的信息，可以方便地查看 /proc/pid/task/tid 来获取线程对应的信息
+	3.ps 命令提供了查看线程信息的 -L 选项，可以通过输出中的 LWP 和 NLWP，来查看同一线程组的线程个数及线程 ID 的信息
+
+    另一个比较有意思的功能是我们可以给线程起一个有意义的名字（具体内容暂放）。
+
+4.线程创建的默认属性
+    创建线程函数的第二个参数是 pthread_attr_t 类型的指针，pthread_attr_init 函数会将线程的属性重置成默认值：
+	#include <pthread.h>
+        int pthread_attr_init(pthread_attr_t *attr);
+
+    在创建线程时，传递重置过的属性，或者传递 NULL，都可以创建一个具有默认属性的线程：
+	Thread attributes:
+                   Detach state        = PTHREAD_CREATE_JOINABLE    可分离状态
+                   Scope               = PTHREAD_SCOPE_SYSTEM       进程调度相关，NPTL 实现中，线程只支持在操作系统范围内竞争 CPU 资源
+                   Inherit scheduler   = PTHREAD_INHERIT_SCHED      进程调度相关，继承启动进程的调度策略
+                   Scheduling policy   = SCHED_OTHER                进程调度相关，调度策略为 SCHED_OTHER
+                   Scheduling priority = 0                          进程调度相关，优先级为 0
+                   Guard size          = 4096 bytes                 警戒缓冲区
+                   Stack address       = 0x40196000                 栈基址
+                   Stack size          = 0x201000 bytes             默认线程栈大小为 8 MB
+
+    默认情况下，线程栈的大小为 8 MB：
+	[lonzo@localhost Test]$ ulimit -s
+	8192
+	[lonzo@localhost Test]$
+
+    调用 pthread_attr_getstack 函数可以返回线程栈的基地址和栈大小。处于可移植性的考虑不建议指定线程栈的基地址。但是有时候会有修改线程栈大小的需要。
+    一个线程需要分配 8MB 左右的栈空间，就决定了不可能无限的创建线程，在进程地址空间受限的 32 位操作系统里尤为如此。在 32 位系统下，3GB 的用户地址空间就
+决定了创建线程的个数不会太多。如果确实需要很多的线程，可以调用接口来调整线程栈的大小。
+	#include <pthread.h>
+       	int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize);
+       	int pthread_attr_getstacksize(pthread_attr_t *attr, size_t *stacksize);
 
